@@ -6,6 +6,25 @@ const predictionOutput = document.getElementById('prediction-output');
 
 const API_URL = 'http://localhost:8000';
 
+// Detect if mobile
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+// Responsive canvas sizing
+function resizeCanvas() {
+  const container = document.querySelector('.container');
+  const maxWidth = Math.min(container.clientWidth - 30, 640);
+  const aspectRatio = 480 / 640;
+  
+  canvasElement.style.width = maxWidth + 'px';
+  canvasElement.style.height = (maxWidth * aspectRatio) + 'px';
+}
+
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => {
+  setTimeout(resizeCanvas, 100);
+});
+resizeCanvas();
+
 // Setup Hands model
 const hands = new Hands({
   locateFile: (file) => {
@@ -14,7 +33,7 @@ const hands = new Hands({
 });
 
 hands.setOptions({
-  maxNumHands: 1,
+  maxNumHands: 2,  // Detect up to 2 hands
   modelComplexity: 1,
   minDetectionConfidence: 0.7,
   minTrackingConfidence: 0.7
@@ -34,15 +53,18 @@ function onResults(results) {
   canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
   
   if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-    const landmarks = results.multiHandLandmarks[0];
+    // Draw all detected hands
+    results.multiHandLandmarks.forEach((landmarks, index) => {
+      drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+      drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
+    });
     
-    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
-    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
-
+    // Use the first detected hand for prediction/capture
+    const landmarks = results.multiHandLandmarks[0];
     const flatCoords = landmarks.map(lm => [lm.x, lm.y, lm.z]).flat();
     const flatCoordsStr = flatCoords.map(v => v.toFixed(4)).join(',');
 
-    landmarksOutput.textContent = `Landmarks: ${flatCoordsStr.substring(0, 100)}...`;
+    landmarksOutput.textContent = `Landmarks (Hand 1/${results.multiHandLandmarks.length}): ${flatCoordsStr.substring(0, 100)}...`;
 
     window.latestCoords = flatCoordsStr;
     window.latestCoordsArray = flatCoords;
@@ -131,21 +153,22 @@ function displayPrediction(data) {
 // ===== UI CONTROLS =====
 
 const modeButton = document.createElement('button');
-modeButton.textContent = '🎥 Start Prediction Mode';
-modeButton.style = 'position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px 20px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;';
+modeButton.id = 'mode-btn-mobile';
+modeButton.className = 'control-button';
+modeButton.textContent = isMobile ? '🎥 Predict' : '🎥 Start Prediction Mode';
 document.body.appendChild(modeButton);
 
 modeButton.addEventListener('click', () => {
   isPredicting = !isPredicting;
   
   if (isPredicting) {
-    modeButton.textContent = '⏸️ Stop Prediction';
+    modeButton.textContent = isMobile ? '⏸️ Stop' : '⏸️ Stop Prediction';
     modeButton.style.background = '#f44336';
-    document.getElementById('capture-controls').style.display = 'none';
+    controlsDiv.style.display = 'none';
   } else {
-    modeButton.textContent = '🎥 Start Prediction Mode';
+    modeButton.textContent = isMobile ? '🎥 Predict' : '🎥 Start Prediction Mode';
     modeButton.style.background = '#4CAF50';
-    document.getElementById('capture-controls').style.display = 'block';
+    controlsDiv.style.display = 'flex';
     predictionOutput.innerHTML = '<div style="color: #999;">Prediction paused</div>';
   }
 });
@@ -153,38 +176,42 @@ modeButton.addEventListener('click', () => {
 // Container for capture controls
 const controlsDiv = document.createElement('div');
 controlsDiv.id = 'capture-controls';
-controlsDiv.style = 'position: absolute; top: 60px; left: 10px; z-index: 10;';
 document.body.appendChild(controlsDiv);
 
 // Batch mode toggle
 const batchToggle = document.createElement('button');
-batchToggle.textContent = '⚡ Start Batch Mode';
-batchToggle.style = 'padding: 10px 20px; font-size: 16px; background: #9E9E9E; color: white; border: none; border-radius: 5px; cursor: pointer; display: block; margin-bottom: 10px; width: 200px;';
+batchToggle.textContent = isMobile ? '⚡ Batch' : '⚡ Start Batch Mode';
+batchToggle.style.background = '#9E9E9E';
 controlsDiv.appendChild(batchToggle);
 
 // Label input (hidden initially)
 const labelInput = document.createElement('input');
 labelInput.type = 'text';
-labelInput.placeholder = 'Enter label (e.g., A)';
-labelInput.style = 'padding: 8px; font-size: 14px; border: 2px solid #ddd; border-radius: 5px; width: 184px; display: none; margin-bottom: 10px;';
+labelInput.placeholder = 'Label (e.g., A)';
+labelInput.style.display = 'none';
 controlsDiv.appendChild(labelInput);
 
 // Capture button
 const captureBtn = document.createElement('button');
-captureBtn.textContent = '📸 Capture Frame';
-captureBtn.style = 'padding: 10px 20px; font-size: 16px; background: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; display: block; margin-bottom: 10px; width: 200px;';
+captureBtn.textContent = '📸 Capture';
+captureBtn.style.background = '#2196F3';
 controlsDiv.appendChild(captureBtn);
 
 // Status display
 const statusDiv = document.createElement('div');
-statusDiv.style = 'padding: 8px; background: #f0f0f0; border-radius: 5px; font-size: 14px; color: #333; margin-bottom: 10px; width: 184px; text-align: center;';
-statusDiv.textContent = 'Total: 0 samples';
+statusDiv.style.background = '#f0f0f0';
+statusDiv.style.color = '#333';
+statusDiv.style.padding = '10px';
+statusDiv.style.borderRadius = '8px';
+statusDiv.style.fontSize = 'clamp(12px, 3vw, 14px)';
+statusDiv.style.textAlign = 'center';
+statusDiv.textContent = 'Total: 0';
 controlsDiv.appendChild(statusDiv);
 
 // Download button
 const downloadBtn = document.createElement('button');
-downloadBtn.textContent = '💾 Download CSV';
-downloadBtn.style = 'padding: 10px 20px; font-size: 16px; background: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer; display: block; width: 200px;';
+downloadBtn.textContent = '💾 Download';
+downloadBtn.style.background = '#FF9800';
 controlsDiv.appendChild(downloadBtn);
 
 // Batch mode toggle
@@ -192,13 +219,13 @@ batchToggle.addEventListener('click', () => {
   batchMode = !batchMode;
   
   if (batchMode) {
-    batchToggle.textContent = '⏹️ Stop Batch Mode';
+    batchToggle.textContent = isMobile ? '⏹️ Stop' : '⏹️ Stop Batch Mode';
     batchToggle.style.background = '#f44336';
     labelInput.style.display = 'block';
     labelInput.focus();
     batchCount = 0;
   } else {
-    batchToggle.textContent = '⚡ Start Batch Mode';
+    batchToggle.textContent = isMobile ? '⚡ Batch' : '⚡ Start Batch Mode';
     batchToggle.style.background = '#9E9E9E';
     labelInput.style.display = 'none';
     labelInput.value = '';
@@ -207,7 +234,7 @@ batchToggle.addEventListener('click', () => {
       alert(`Batch complete! Captured ${batchCount} samples.`);
     }
     batchCount = 0;
-    captureBtn.textContent = '📸 Capture Frame';
+    captureBtn.textContent = isMobile ? '📸 Capture' : '📸 Capture Frame';
   }
 });
 
@@ -215,9 +242,9 @@ batchToggle.addEventListener('click', () => {
 labelInput.addEventListener('input', (e) => {
   batchLabel = e.target.value.trim();
   if (batchLabel) {
-    captureBtn.textContent = `📸 Capture "${batchLabel}"`;
+    captureBtn.textContent = isMobile ? `📸 ${batchLabel}` : `📸 Capture "${batchLabel}"`;
   } else {
-    captureBtn.textContent = '📸 Capture Frame';
+    captureBtn.textContent = isMobile ? '📸 Capture' : '📸 Capture Frame';
   }
 });
 
@@ -273,28 +300,39 @@ downloadBtn.addEventListener('click', () => {
   alert(`✓ Downloaded ${capturedData.length} samples!`);
 });
 
-// Setup Camera
-const camera = new Camera(videoElement, {
+// Setup Camera with mobile support
+const cameraConfig = {
   onFrame: async () => {
     await hands.send({ image: videoElement });
   },
   width: 640,
   height: 480
-});
+};
+
+// Use rear camera on mobile if available
+if (isMobile) {
+  cameraConfig.facingMode = { ideal: 'environment' };
+}
+
+const camera = new Camera(videoElement, cameraConfig);
 camera.start();
 
 // Check server connection
 async function checkServerConnection() {
   try {
-    const response = await fetch(`${API_URL}/`);
+    const response = await fetch(`$http://127.0.0.1:8000/`);
     const data = await response.json();
-    console.log('✓ Server connected:', data);
+    console.log('Server connected:', data);
     
-    const gesturesResponse = await fetch(`${API_URL}/gestures`);
+    const gesturesResponse = await fetch(`$http://127.0.0.1:8000/gestures`);
     const gesturesData = await gesturesResponse.json();
     console.log('✓ Available gestures:', gesturesData.gestures);
   } catch (error) {
-    console.warn('⚠️ Server not connected.');
+    console.warn(' Server not connected.');
+    if (isMobile) {
+      console.warn('📱 Mobile: Make sure to use your computer\'s IP address instead of localhost');
+      console.warn('Example: Change API_URL to http://192.168.1.100:8000');
+    }
   }
 }
 

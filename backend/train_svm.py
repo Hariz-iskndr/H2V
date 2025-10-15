@@ -19,13 +19,25 @@ def load_and_prepare_data(csv_path):
     y = df.iloc[:, -1].values   # Labels
     
     print(f"Loaded {len(X)} samples with {X.shape[1]} features")
-    print(f"Classes found: {np.unique(y)}")
+    
+    # DATA AUGMENTATION: Mirror all samples to work with both hands
+    print("Augmenting data by mirroring for left/right hand compatibility...")
+    X_mirrored = X.copy()
+    # Flip x-coordinates (every 3rd value starting from index 0)
+    X_mirrored[:, 0::3] = 1 - X_mirrored[:, 0::3]  # Mirror x-coords
+    
+    # Combine original + mirrored
+    X_augmented = np.vstack([X, X_mirrored])
+    y_augmented = np.hstack([y, y])
+    
+    print(f"After augmentation: {len(X_augmented)} samples (2x original)")
+    print(f"Classes found: {np.unique(y_augmented)}")
     print(f"Samples per class:")
-    for label in np.unique(y):
-        count = np.sum(y == label)
+    for label in np.unique(y_augmented):
+        count = np.sum(y_augmented == label)
         print(f"  {label}: {count} samples")
     
-    return X, y
+    return X_augmented, y_augmented
 
 def preprocess_data(X, y):
     """Normalize features and encode labels"""
@@ -92,7 +104,7 @@ def save_model(model, scaler, label_encoder, save_dir=None):
     """Save trained model and preprocessors"""
     if save_dir is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        save_dir = os.path.join(script_dir, 'models')
+        save_dir = os.path.join(script_dir, 'models')  # No 'backend/' needed!
     os.makedirs(save_dir, exist_ok=True)
     
     model_path = os.path.join(save_dir, 'svm_model.pkl')
@@ -107,11 +119,11 @@ def save_model(model, scaler, label_encoder, save_dir=None):
     print(f"✓ Scaler saved to: {scaler_path}")
     print(f"✓ Label encoder saved to: {encoder_path}")
 
+
 def main():
-    # Configuration - use absolute path to avoid issues
     import os
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    CSV_PATH = os.path.join(script_dir, 'data', 'hand_gesture_data.csv')  # No 'backend/' needed!
+    CSV_PATH = os.path.join(script_dir, 'data', 'hand_gesture_data.csv') 
     TEST_SIZE = 0.2
     RANDOM_STATE = 42
     
@@ -119,7 +131,7 @@ def main():
         # Load data
         X, y = load_and_prepare_data(CSV_PATH)
         
-        # Check if we have enough data (relaxed for demo)
+        # Check if we have enough data 
         if len(X) < 5:
             print("\n⚠️  WARNING: Too few samples! Collect at least 10 samples per gesture.")
             return
@@ -147,7 +159,7 @@ def main():
         # Evaluate
         accuracy = evaluate_model(model, X_test, y_test, label_encoder)
         
-        # Save if accuracy is reasonable (lowered threshold for demo)
+        # Save if accuracy is reasonable
         if accuracy > 0.4:
             save_model(model, scaler, label_encoder)
             print("\n✅ Model training completed successfully!")

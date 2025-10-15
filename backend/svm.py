@@ -13,21 +13,21 @@ app = FastAPI(title="H2V Sign Language API")
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=True, 
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Load ML models at startup
-MODEL_DIR = 'models'
+MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models') 
 svm_model = None
 scaler = None
 label_encoder = None
 
+# Load models function
 @app.on_event("startup")
 def load_models():
-    """Load trained models when server starts"""
     global svm_model, scaler, label_encoder
     
     try:
@@ -47,14 +47,14 @@ def load_models():
     except Exception as e:
         print(f"❌ Error loading models: {str(e)}")
 
-# Pydantic models
+# Landmark classification request/response models
 class LandmarkRequest(BaseModel):
     name: str
     landmarks: str
     description: str
 
 class PredictionRequest(BaseModel):
-    landmarks: List[float]  # 63 values: [x1,y1,z1,...,x21,y21,z21]
+    landmarks: List[float]
 
 class PredictionResponse(BaseModel):
     gesture: str
@@ -82,7 +82,7 @@ def root():
 
 @app.get("/gestures")
 def get_available_gestures():
-    """Get list of gestures the model can recognize"""
+    #Get list of gestures the model can recognize
     if label_encoder is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
@@ -93,11 +93,9 @@ def get_available_gestures():
 
 @app.post("/predict")
 def predict_gesture(request: PredictionRequest):
-    """
-    Predict gesture from hand landmarks
-    
-    Expects 63 values: x1,y1,z1,x2,y2,z2,...,x21,y21,z21
-    """
+
+    #Predict gesture from hand landmarks
+        
     if svm_model is None or scaler is None or label_encoder is None:
         raise HTTPException(
             status_code=503, 
@@ -112,15 +110,32 @@ def predict_gesture(request: PredictionRequest):
                 detail=f"Expected 63 landmark values, got {len(request.landmarks)}"
             )
         
-        # Prepare data
-        X = np.array(request.landmarks).reshape(1, -1)
+        # Prepare data - predict for both orientations
+        X_original = np.array(request.landmarks).reshape(1, -1)
+        X_mirrored = X_original.copy()
+        X_mirrored[:, 0::3] = 1 - X_mirrored[:, 0::3]  # Mirror x-coordinates
         
         # Scale features
-        X_scaled = scaler.transform(X)
+        X_original_scaled = scaler.transform(X_original)
+        X_mirrored_scaled = scaler.transform(X_mirrored)
         
-        # Predict
-        prediction = svm_model.predict(X_scaled)[0]
-        probabilities = svm_model.predict_proba(X_scaled)[0]
+        # Predict both
+        pred_original = svm_model.predict(X_original_scaled)[0]
+        prob_original = svm_model.predict_proba(X_original_scaled)[0]
+        
+        pred_mirrored = svm_model.predict(X_mirrored_scaled)[0]
+        prob_mirrored = svm_model.predict_proba(X_mirrored_scaled)[0]
+        
+        # Use the prediction with higher confidence
+        conf_original = prob_original[pred_original]
+        conf_mirrored = prob_mirrored[pred_mirrored]
+        
+        if conf_original >= conf_mirrored:
+            prediction = pred_original
+            probabilities = prob_original
+        else:
+            prediction = pred_mirrored
+            probabilities = prob_mirrored
         
         # Get gesture name
         gesture = label_encoder.inverse_transform([prediction])[0]
@@ -170,7 +185,3 @@ def get_stats(db: Session = Depends(get_db)):
         "model_loaded": svm_model is not None,
         "available_gestures": label_encoder.classes_.tolist() if label_encoder else []
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
