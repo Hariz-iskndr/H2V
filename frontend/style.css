@@ -448,6 +448,37 @@ canvas {
   }
 }
 
+/* Mobile safe-area & small-screen tweaks */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* keep settings/button clear of notch and home indicator */
+@media (max-width: 480px) {
+  #settings-btn {
+    top: calc(8px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+  }
+
+  #settings-panel {
+    top: calc(56px + env(safe-area-inset-top));
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: calc(100% - 16px);
+  }
+
+  #capture-controls {
+    bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ensure settings panel is above other UI */
+#settings-panel {
+  z-index: 1100; /* higher than other controls */
+}
+
 .switch {
   position: relative;
   display: inline-block;
