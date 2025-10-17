@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0e1320">
   <title>H2V - Hands 2 Voice Sign Language Translator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
   <!-- Mediapipe + Camera Utils -->
@@ -32,6 +36,114 @@
         <li><strong>Training Mode:</strong> Use "Batch Mode" to collect training data quickly</li>
         <li><strong>If on Mobile:</strong> Use rear camera for better hand detection</li>
       </ul>
+    </div>
+  </div>
+
+  <!-- Settings Floating UI -->
+  <button id="settings-btn" aria-label="Open settings">
+    <img src="./design/settings.png" alt="Settings" class="settings-icon">
+  </button>
+  <div id="settings-panel" aria-hidden="true">
+    <h4>General & Appearance</h4>
+    <div class="setting-row">
+      <span>Camera</span>
+      <select id="cam-facing">
+        <option value="user">Front</option>
+        <option value="environment">Back</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <span>Light mode</span>
+      <label class="switch">
+        <input type="checkbox" id="toggle-theme">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Font size</span>
+      <select id="ui-font-size">
+        <option value="normal">Normal</option>
+        <option value="large">Large</option>
+        <option value="xl">XL</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <span>High contrast</span>
+      <label class="switch">
+        <input type="checkbox" id="ui-contrast">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <h4>Detection</h4>
+    <div class="setting-row">
+      <span>Prediction conf</span>
+      <input id="pred-threshold" type="range" min="0.3" max="0.9" step="0.01">
+    </div>
+    <div class="setting-row">
+      <span>Detect conf</span>
+      <input id="det-detect-conf" type="range" min="0.3" max="0.9" step="0.01">
+    </div>
+    <div class="setting-row">
+      <span>Track conf</span>
+      <input id="det-track-conf" type="range" min="0.3" max="0.9" step="0.01">
+    </div>
+    <div class="setting-row">
+      <span>Detection quality</span>
+      <select id="det-model" title="Fast = faster, Balanced = better quality">
+        <option value="0">Fast (0)</option>
+        <option value="1">Balanced (1)</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <span>Max hands</span>
+      <select id="det-max-hands">
+        <option value="1">1</option>
+        <option value="2">2</option>
+      </select>
+    </div>
+
+    <h4>Overlays</h4>
+    <div class="setting-row">
+      <span>Connectors</span>
+      <label class="switch">
+        <input type="checkbox" id="ov-show-connectors">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Landmarks</span>
+      <label class="switch">
+        <input type="checkbox" id="ov-show-landmarks">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Line color</span>
+      <input id="ov-line-color" type="color">
+    </div>
+    <div class="setting-row">
+      <span>Point color</span>
+      <input id="ov-point-color" type="color">
+    </div>
+    <div class="setting-row">
+      <span>Line width</span>
+      <input id="ov-line-width" type="range" min="1" max="8" step="1">
+    </div>
+    <div class="setting-row">
+      <span>Point size</span>
+      <input id="ov-point-size" type="range" min="1" max="6" step="1">
+    </div>
+    <div class="setting-row">
+      <span>Flip preview</span>
+      <label class="switch">
+        <input type="checkbox" id="ov-flip">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-row">
+      <button id="settings-reset" style="padding:8px 10px; border-radius:10px;">Reset</button>
     </div>
   </div>
 
