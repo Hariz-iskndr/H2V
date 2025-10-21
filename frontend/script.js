@@ -203,13 +203,23 @@ async function restartCamera() {
       } finally {
         inFlight = false;
       }
-    }
+    },
+    width: 640,
+    height: 480
   };
-  const facingMode = settings.camera.facing;
-  if (facingMode) config.facingMode = { ideal: facingMode };
-  // Don't specify width/height to allow native camera resolution
-  camera = new Camera(videoElement, config);
-  camera.start();
+
+  // Use rear camera on mobile if available
+  if (isMobile) {
+    config.facingMode = { ideal: 'environment' };
+  }
+
+  // Start the camera (uses existing `camera` variable)
+  if (typeof Camera !== 'undefined') {
+    camera = new Camera(videoElement, config);
+    camera.start();
+  } else {
+    console.warn('Camera is not available in this context.');
+  }
 }
 
 // Wake lock removed
@@ -358,6 +368,9 @@ async function predictGesture(landmarks) {
   }
 }
 
+let lastSpokenAt = 0;
+const SPEECH_COOLDOWN_MS = 1500; // minimum ms between TTS plays
+
 function displayPrediction(data) {
   const confidencePercent = (data.confidence * 100).toFixed(1);
   const confidenceColor = data.confidence > 0.7 ? '#3DFF9B' : data.confidence > 0.5 ? '#FFC857' : '#FF6B6B';
@@ -408,6 +421,97 @@ function displayPrediction(data) {
   });
   
   predictionOutput.innerHTML = html;
+
+  // speak the top predicted gesture (throttled)
+  try {
+    const now = Date.now();
+    const CONFIDENCE_THRESHOLD = settings.prediction.threshold ?? 0.6;
+    if (data.confidence >= CONFIDENCE_THRESHOLD && (now - lastSpokenAt) > SPEECH_COOLDOWN_MS) {
+      lastSpokenAt = now;
+      speakText(data.gesture);
+    }
+  } catch (e) {
+    console.warn('speakText call failed', e);
+  }
+}
+
+/**
+ * Speak text using Web Speech API if supported,
+ * otherwise call server TTS endpoint and play returned audio blob/base64.
+ * Expects server endpoint at `${API_URL}/speak` accepting JSON { text } and returning audio (audio/mpeg or base64 JSON).
+ */
+async function speakText(text) {
+  if (!text) return;
+
+  // 1) Browser TTS first
+  if ('speechSynthesis' in window) {
+    try {
+      // ensure user interaction allowed: test quickly (no-op) to warm voices
+      if (!window.speechSynthesis.getVoices().length) {
+        window.speechSynthesis.getVoices();
+      }
+
+      // If already speaking, skip to avoid overlaps
+      if (window.speechSynthesis.speaking) {
+        // optional: cancel() here if you prefer cutting previous utterance
+        // window.speechSynthesis.cancel();
+        return;
+      }
+
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = navigator.language || 'en-US';
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
+
+      // safe handlers to log errors
+      utter.onerror = (ev) => console.warn('TTS utterance error', ev);
+      window.speechSynthesis.speak(utter);
+      return;
+    } catch (err) {
+      console.warn('Web Speech failed, falling back to server TTS:', err);
+    }
+  }
+
+  // 2) Server TTS fallback
+  try {
+    const resp = await fetch(`${API_URL}/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+
+    if (!resp.ok) throw new Error(`TTS HTTP ${resp.status}`);
+
+    const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+
+    if (contentType.includes('audio') || contentType.includes('octet-stream')) {
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      await a.play().catch(e => console.error('Audio play failed:', e));
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
+    }
+
+    // handle JSON that might include base64
+    const json = await resp.json().catch(() => null);
+    if (json && (json.audio_base64 || json.audio)) {
+      const b64 = json.audio_base64 || json.audio;
+      const bin = atob(b64);
+      const len = bin.length;
+      const buffer = new Uint8Array(len);
+      for (let i = 0; i < len; i++) buffer[i] = bin.charCodeAt(i);
+      const blob = new Blob([buffer], { type: json.content_type || 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      await new Audio(url).play().catch(e => console.error('Audio play failed:', e));
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
+    }
+
+    console.warn('TTS response not recognized:', contentType, json);
+  } catch (err) {
+    console.error('speakText error:', err);
+  }
 }
 
 // ===== UI CONTROLS =====
