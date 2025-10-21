@@ -8,6 +8,12 @@ let API_URL = 'http://localhost:8000';
 // Detect if mobile (must be before defaultSettings)
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+if (isMobile) {
+  document.documentElement.classList.add('is-mobile'); // or document.body.classList.add(...)
+} else {
+  document.documentElement.classList.remove('is-mobile');
+}
+
 // ===== Settings / Theme =====
 const settingsBtn = document.getElementById('settings-btn');
 const settingsPanel = document.getElementById('settings-panel');
@@ -411,6 +417,32 @@ modeButton.id = 'mode-btn-mobile';
 modeButton.className = 'control-button';
 modeButton.textContent = isMobile ? '🎥 Predict' : '🎥 Start Prediction Mode';
 document.body.appendChild(modeButton);
+
+// place prediction button on the left side for mobile
+if (isMobile) {
+  Object.assign(modeButton.style, {
+    position: 'fixed',
+    left: '12px',      // moved to left
+    top: '50%',
+    transform: 'translateY(-50%)',
+    zIndex: '1100',
+    width: '52px',
+    height: '52px',
+    padding: '0',
+    borderRadius: '999px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '18px',
+    lineHeight: '1',
+  });
+  // ensure any right value from CSS is cleared and force left
+  modeButton.style.setProperty('right', 'auto', 'important');
+  modeButton.style.setProperty('left', '12px', 'important');
+
+  // compact label for small screens
+  modeButton.textContent = '🎥';
+}
 
 modeButton.addEventListener('click', () => {
   isPredicting = !isPredicting;
